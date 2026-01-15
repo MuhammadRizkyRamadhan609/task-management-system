@@ -1,9 +1,8 @@
 /**
- * Enhanced Task Model - Task dengan fitur tambahan untuk Day 2
- * 
- * Fitur baru:
+ * Enhanced Task Model - Task dengan fitur tambahan untuk Day 2 & Day 4
+ * * Fitur:
  * - Multi-user support (owner dan assignee)
- * - Categories dan tags
+ * - Categories dan tags (dengan display name)
  * - Due dates dengan overdue detection
  * - Status yang lebih detail
  * - Time tracking
@@ -26,7 +25,7 @@ class EnhancedTask {
         this._ownerId = ownerId;
         this._assigneeId = options.assigneeId || ownerId; // default assigned to owner
         
-        // Properties baru untuk Day 2
+        // Properties baru untuk Day 2 & Day 4
         this._category = this._validateCategory(options.category || 'personal');
         this._tags = Array.isArray(options.tags) ? options.tags : [];
         this._priority = this._validatePriority(options.priority || 'medium');
@@ -102,11 +101,54 @@ class EnhancedTask {
         this._updateTimestamp();
     }
     
+    // --- METODE BARU/UPDATE UNTUK KATEGORI (DAY 4) ---
+
+    /**
+     * Update task category
+     * @param {string} newCategory - New category
+     */
     updateCategory(newCategory) {
         this._category = this._validateCategory(newCategory);
         this._updateTimestamp();
     }
-    
+
+    /**
+     * Get available categories (static method)
+     * @returns {string[]} - Array of valid categories
+     */
+    static getAvailableCategories() {
+        return ['work', 'personal', 'study', 'health', 'finance', 'shopping', 'other'];
+    }
+
+    /**
+     * Get category display name
+     * @returns {string} - Formatted category name
+     */
+    getCategoryDisplayName() {
+        const categoryNames = {
+            'work': 'Work & Business',
+            'personal': 'Personal',
+            'study': 'Study & Learning',
+            'health': 'Health & Fitness',
+            'finance': 'Finance & Money',
+            'shopping': 'Shopping',
+            'other': 'Other'
+        };
+        
+        return categoryNames[this._category] || this._category;
+    }
+
+    /**
+     * Check if task belongs to specific category
+     * @param {string} category - Category to check
+     * @returns {boolean} - True if task is in category
+     */
+    isInCategory(category) {
+        return this._category === category;
+    }
+
+    // --- AKHIR METODE BARU ---
+
     addTag(tag) {
         if (tag && !this._tags.includes(tag)) {
             this._tags.push(tag);
@@ -230,7 +272,8 @@ class EnhancedTask {
     }
     
     _validateCategory(category) {
-        const validCategories = ['work', 'personal', 'study', 'health', 'finance', 'other'];
+        // Update: Sekarang menggunakan static method agar sinkron dengan 'shopping'
+        const validCategories = EnhancedTask.getAvailableCategories();
         if (!validCategories.includes(category)) {
             throw new Error(`Kategori tidak valid: ${category}. Harus salah satu dari: ${validCategories.join(', ')}`);
         }

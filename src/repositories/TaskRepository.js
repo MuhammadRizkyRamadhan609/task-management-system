@@ -1,3 +1,8 @@
+/**
+ * Task Repository - Menangani penyimpanan dan pengambilan data Task
+ * Versi Terintegrasi Day 1-4
+ */
+
 // 1. Perbaikan: Gunakan conditional import di paling atas agar kompatibel dengan Browser dan Node.js
 if (typeof require !== 'undefined' && typeof module !== 'undefined') {
     // Hanya lakukan require jika kita sedang di lingkungan Node.js (Testing)
@@ -231,41 +236,27 @@ class TaskRepository {
     filter(filters) {
         let results = this.findAll();
         
-        if (filters.ownerId) {
-            results = results.filter(task => task.ownerId === filters.ownerId);
-        }
-        
-        if (filters.assigneeId) {
-            results = results.filter(task => task.assigneeId === filters.assigneeId);
-        }
-        
-        if (filters.category) {
-            results = results.filter(task => task.category === filters.category);
-        }
-        
-        if (filters.status) {
-            results = results.filter(task => task.status === filters.status);
-        }
-        
-        if (filters.priority) {
-            results = results.filter(task => task.priority === filters.priority);
-        }
-        
-        if (filters.overdue) {
-            results = results.filter(task => task.isOverdue);
-        }
-        
-        if (filters.dueSoon) {
+        if (filters.status && filters.status !== 'all') {
             results = results.filter(task => {
-                const days = task.daysUntilDue;
-                return days !== null && days <= 3 && days >= 0;
+                // Cek getter isCompleted atau properti _status
+                const status = task.status || task._status;
+                return status === filters.status;
             });
         }
         
-        if (filters.tags && filters.tags.length > 0) {
-            results = results.filter(task =>
-                filters.tags.some(tag => task.tags.includes(tag))
-            );
+        if (filters.priority && filters.priority !== 'all') {
+            results = results.filter(task => {
+                // Robust check: cek getter priority atau properti _priority
+                const priority = task.priority || task._priority;
+                return priority === filters.priority;
+            });
+        }
+        
+        if (filters.category && filters.category !== 'all') {
+            results = results.filter(task => {
+                const category = task.category || task._category;
+                return category === filters.category;
+            });
         }
         
         return results;
@@ -313,11 +304,75 @@ class TaskRepository {
             }
         });
     }
-    
+
     /**
-     * Get task statistics
-     * @param {string} userId - User ID (optional, untuk stats per user)
-     * @returns {Object} - Task statistics
+     * --- METODE BARU YANG DITAMBAHKAN ---
+     */
+
+    /**
+     * Get task statistics by category
+     * @param {string} userId - User ID (optional)
+     * @returns {Object} - Statistics grouped by category
+     */
+    getCategoryStats(userId = null) {
+        let tasks = userId ? this.findByOwner(userId) : this.findAll();
+        
+        const stats = {};
+        const categories = EnhancedTask.getAvailableCategories();
+        
+        // Initialize all categories with 0
+        categories.forEach(category => {
+            stats[category] = {
+                total: 0,
+                completed: 0,
+                pending: 0,
+                overdue: 0
+            };
+        });
+        
+        // Count tasks in each category
+        tasks.forEach(task => {
+            const category = task.category;
+            if (stats[category]) {
+                stats[category].total++;
+                
+                if (task.isCompleted) {
+                    stats[category].completed++;
+                } else {
+                    stats[category].pending++;
+                }
+                
+                if (task.isOverdue) {
+                    stats[category].overdue++;
+                }
+            }
+        });
+        
+        return stats;
+    }
+
+    /**
+     * Get most used categories
+     * @param {string} userId - User ID (optional)
+     * @param {number} limit - Number of categories to return
+     * @returns {Array} - Array of categories sorted by usage
+     */
+    getMostUsedCategories(userId = null, limit = 5) {
+        const stats = this.getCategoryStats(userId);
+        
+        return Object.entries(stats)
+            .sort(([,a], [,b]) => b.total - a.total)
+            .slice(0, limit)
+            .map(([category, data]) => ({
+                category,
+                count: data.total,
+                displayName: EnhancedTask.prototype.getCategoryDisplayName.call({ _category: category })
+            }));
+    }
+
+    /**
+     * Get task statistics (High Level Summary)
+     * Diperbarui agar menggunakan EnhancedTask.getAvailableCategories()
      */
     getStats(userId = null) {
         let tasks = userId ? this.findByOwner(userId) : this.findAll();
@@ -345,15 +400,16 @@ class TaskRepository {
             stats.byPriority[priority] = tasks.filter(task => task.priority === priority).length;
         });
         
-        // Count by category
-        ['work', 'personal', 'study', 'health', 'finance', 'other'].forEach(category => {
+        // Count by category (Menggunakan kategori dinamis dari Model)
+        EnhancedTask.getAvailableCategories().forEach(category => {
             stats.byCategory[category] = tasks.filter(task => task.category === category).length;
         });
         
         return stats;
     }
+
+    // --- PRIVATE METHODS ---
     
-    // Private methods
     _loadTasksFromStorage() {
         try {
             const tasksData = this.storage.load(this.storageKey, []);
