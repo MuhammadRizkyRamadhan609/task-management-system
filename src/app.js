@@ -1,12 +1,11 @@
 /**
- * Day 2 Main Application - MVC Implementation
- * 
- * Orchestrates semua komponen:
+ * Day 4 Main Application - MVC Implementation with Category Features
+ * * Orchestrates semua komponen:
  * - Storage Manager
  * - Repositories
  * - Controllers
  * - Views
- * - User Authentication
+ * - Category Filtering & Stats
  */
 
 // Global application state
@@ -24,11 +23,11 @@ let app = {
  * Initialize aplikasi
  */
 function initializeApp() {
-    console.log('🚀 Initializing Day 2 Task Management System...');
+    console.log('🚀 Initializing Day 4 Task Management System...');
     
     try {
         // Initialize storage manager
-        app.storage = new EnhancedStorageManager('taskAppDay2', '2.0');
+        app.storage = new EnhancedStorageManager('taskAppDay4', '4.0');
         console.log('✅ Storage manager initialized');
         
         // Initialize repositories
@@ -45,8 +44,8 @@ function initializeApp() {
         app.taskView = new TaskView(app.taskController, app.userController);
         console.log('✅ Views initialized');
         
-        // Setup authentication event listeners
-        setupAuthEventListeners();
+        // Setup all event listeners
+        setupEventListeners();
         
         // Create demo user jika belum ada
         createDemoUserIfNeeded();
@@ -54,7 +53,10 @@ function initializeApp() {
         // Show login section
         showLoginSection();
         
-        console.log('✅ Day 2 Application initialized successfully!');
+        // NEW: Render initial category stats jika user sudah login (opsional)
+        renderCategoryStats();
+        
+        console.log('✅ Day 4 Application initialized successfully!');
         
     } catch (error) {
         console.error('❌ Failed to initialize application:', error);
@@ -63,52 +65,37 @@ function initializeApp() {
 }
 
 /**
- * Setup authentication event listeners
+ * Setup all event listeners (Auth, Category Filters, Quick Actions)
  */
-function setupAuthEventListeners() {
+function setupEventListeners() {
     // Login button
     const loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', handleLogin);
-    }
+    if (loginBtn) loginBtn.addEventListener('click', handleLogin);
     
     // Register button
     const registerBtn = document.getElementById('registerBtn');
-    if (registerBtn) {
-        registerBtn.addEventListener('click', showRegisterModal);
-    }
+    if (registerBtn) registerBtn.addEventListener('click', showRegisterModal);
     
     // Logout button
     const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
-    }
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
     
     // Username input (Enter key)
     const usernameInput = document.getElementById('usernameInput');
     if (usernameInput) {
         usernameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleLogin();
-            }
+            if (e.key === 'Enter') handleLogin();
         });
     }
     
-    // Register form
+    // Register form & modal
     const registerForm = document.getElementById('registerForm');
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
-    }
+    if (registerForm) registerForm.addEventListener('submit', handleRegister);
     
-    // Register modal close
     const closeRegisterModal = document.getElementById('closeRegisterModal');
     const cancelRegister = document.getElementById('cancelRegister');
-    if (closeRegisterModal) {
-        closeRegisterModal.addEventListener('click', hideRegisterModal);
-    }
-    if (cancelRegister) {
-        cancelRegister.addEventListener('click', hideRegisterModal);
-    }
+    if (closeRegisterModal) closeRegisterModal.addEventListener('click', hideRegisterModal);
+    if (cancelRegister) cancelRegister.addEventListener('click', hideRegisterModal);
     
     // Quick action buttons
     const showOverdueBtn = document.getElementById('showOverdueBtn');
@@ -116,23 +103,47 @@ function setupAuthEventListeners() {
     const exportDataBtn = document.getElementById('exportDataBtn');
     const refreshTasks = document.getElementById('refreshTasks');
     
-    if (showOverdueBtn) {
-        showOverdueBtn.addEventListener('click', showOverdueTasks);
-    }
-    if (showDueSoonBtn) {
-        showDueSoonBtn.addEventListener('click', showDueSoonTasks);
-    }
-    if (exportDataBtn) {
-        exportDataBtn.addEventListener('click', exportAppData);
-    }
-    if (refreshTasks) {
-        refreshTasks.addEventListener('click', () => app.taskView.refresh());
+    if (showOverdueBtn) showOverdueBtn.addEventListener('click', showOverdueTasks);
+    if (showDueSoonBtn) showDueSoonBtn.addEventListener('click', showDueSoonTasks);
+    if (exportDataBtn) exportDataBtn.addEventListener('click', exportAppData);
+    if (refreshTasks) refreshTasks.addEventListener('click', () => {
+        app.taskView.refresh();
+        renderCategoryStats();
+    });
+
+    // NEW: Category filter buttons
+    const categoryButtons = document.querySelectorAll('.category-btn');
+    categoryButtons.forEach(btn => {
+        btn.addEventListener('click', handleCategoryFilter);
+    });
+
+    // NEW: Handle Task Form Submission
+    const taskForm = document.getElementById('taskForm');
+    if (taskForm) {
+        taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(taskForm);
+            const title = formData.get('title');
+            const description = formData.get('description');
+            const category = formData.get('category');
+            const priority = formData.get('priority');
+            const dueDate = formData.get('dueDate');
+
+            try {
+                app.taskController.createTask(title, description, dueDate, priority, category, app.currentUser.id);
+                taskForm.reset();
+                app.taskView.refresh();
+                renderCategoryStats();
+                showMessage('Task berhasil dibuat!', 'success');
+            } catch (err) {
+                showMessage(err.message, 'error');
+            }
+        });
     }
 }
 
-/**
- * Handle user login
- */
+// --- AUTHENTICATION HANDLERS ---
+
 function handleLogin() {
     const usernameInput = document.getElementById('usernameInput');
     const username = usernameInput.value.trim();
@@ -146,74 +157,39 @@ function handleLogin() {
     
     if (response.success) {
         app.currentUser = response.data;
-        
-        // Set current user di task controller
         app.taskController.setCurrentUser(app.currentUser.id);
-        
-        // Show main content
         showMainContent();
-        
-        // Load user list untuk assign dropdown
         loadUserListForAssign();
-        
-        // Refresh views
         app.taskView.refresh();
-        
+        renderCategoryStats(); // Render stats saat login
         showMessage(response.message, 'success');
     } else {
         showMessage(response.error, 'error');
     }
 }
 
-/**
- * Handle user logout
- */
 function handleLogout() {
     const response = app.userController.logout();
-    
     app.currentUser = null;
-    
-    // Hide main content
     hideMainContent();
-    
-    // Show login section
     showLoginSection();
-    
     showMessage(response.message, 'info');
 }
 
-/**
- * Show register modal
- */
 function showRegisterModal() {
     const modal = document.getElementById('registerModal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    if (modal) modal.style.display = 'flex';
 }
 
-/**
- * Hide register modal
- */
 function hideRegisterModal() {
     const modal = document.getElementById('registerModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    
-    // Reset form
+    if (modal) modal.style.display = 'none';
     const form = document.getElementById('registerForm');
-    if (form) {
-        form.reset();
-    }
+    if (form) form.reset();
 }
 
-/**
- * Handle user registration
- */
 function handleRegister(event) {
     event.preventDefault();
-    
     const formData = new FormData(event.target);
     const userData = {
         username: formData.get('username')?.trim(),
@@ -222,34 +198,25 @@ function handleRegister(event) {
     };
     
     const response = app.userController.register(userData);
-    
     if (response.success) {
         hideRegisterModal();
         showMessage(response.message, 'success');
-        
-        // Auto-fill username untuk login
         const usernameInput = document.getElementById('usernameInput');
-        if (usernameInput) {
-            usernameInput.value = userData.username;
-        }
+        if (usernameInput) usernameInput.value = userData.username;
     } else {
         showMessage(response.error, 'error');
     }
 }
 
-/**
- * Show login section
- */
+// --- UI NAVIGATION ---
+
 function showLoginSection() {
     const loginSection = document.getElementById('loginSection');
     const userInfo = document.getElementById('userInfo');
     const mainContent = document.getElementById('mainContent');
-    
     if (loginSection) loginSection.style.display = 'flex';
     if (userInfo) userInfo.style.display = 'none';
     if (mainContent) mainContent.style.display = 'none';
-    
-    // Clear username input
     const usernameInput = document.getElementById('usernameInput');
     if (usernameInput) {
         usernameInput.value = '';
@@ -257,47 +224,172 @@ function showLoginSection() {
     }
 }
 
-/**
- * Show main content
- */
 function showMainContent() {
     const loginSection = document.getElementById('loginSection');
     const userInfo = document.getElementById('userInfo');
     const mainContent = document.getElementById('mainContent');
     const welcomeMessage = document.getElementById('welcomeMessage');
-    
     if (loginSection) loginSection.style.display = 'none';
     if (userInfo) userInfo.style.display = 'flex';
     if (mainContent) mainContent.style.display = 'block';
-    
     if (welcomeMessage && app.currentUser) {
         welcomeMessage.textContent = `Selamat datang, ${app.currentUser.fullName || app.currentUser.username}!`;
     }
 }
 
-/**
- * Hide main content
- */
 function hideMainContent() {
     const mainContent = document.getElementById('mainContent');
-    if (mainContent) {
-        mainContent.style.display = 'none';
-    }
+    if (mainContent) mainContent.style.display = 'none';
+}
+
+// --- NEW CATEGORY FILTERING FUNCTIONS ---
+
+/**
+ * Handle category filter changes
+ */
+function handleCategoryFilter(event) {
+    const category = event.target.dataset.category;
+    
+    // Update active category button
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Clear other filter buttons status
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Render tasks filtered by category
+    renderTaskList('category', category);
 }
 
 /**
- * Load user list untuk assign dropdown
+ * Update renderTaskList function untuk support category filtering
  */
+function renderTaskList(filterType = 'all', filterValue = null) {
+    const taskListContainer = document.getElementById('taskList');
+    if (!taskListContainer) return;
+    
+    // Ambil data melalui repository/controller agar sinkron dengan state app
+    let tasks = app.taskRepository.findAll();
+    
+    // Apply filters
+    switch (filterType) {
+        case 'pending':
+            tasks = tasks.filter(task => !task.isCompleted);
+            break;
+        case 'completed':
+            tasks = tasks.filter(task => task.isCompleted);
+            break;
+        case 'high':
+            tasks = tasks.filter(task => task.priority === 'high');
+            break;
+        case 'category':
+            tasks = tasks.filter(task => task.category === filterValue);
+            break;
+    }
+    
+    // Sort tasks by creation date (newest first)
+    tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    if (tasks.length === 0) {
+        const filterText = filterType === 'category' ? `in ${filterValue} category` : `with ${filterType} filter`;
+        taskListContainer.innerHTML = `
+            <div class="empty-state">
+                <p>No tasks found ${filterText}</p>
+                <small>Create your first task using the form above</small>
+            </div>
+        `;
+        return;
+    }
+    
+    const taskHTML = tasks.map(task => createTaskHTML(task)).join('');
+    taskListContainer.innerHTML = taskHTML;
+}
+
+/**
+ * Update createTaskHTML function untuk include category display
+ */
+function createTaskHTML(task) {
+    const priorityClass = `priority-${task.priority}`;
+    const completedClass = task.isCompleted ? 'completed' : '';
+    const categoryClass = `category-${task.category}`;
+    const createdDate = new Date(task.createdAt).toLocaleDateString();
+    
+    // Gunakan fungsi dari model untuk nama yang lebih cantik
+    const categoryDisplay = task.getCategoryDisplayName ? task.getCategoryDisplayName() : task.category;
+    
+    return `
+        <div class="task-item ${priorityClass} ${completedClass}" data-task-id="${task.id}">
+            <div class="task-content">
+                <div class="task-header">
+                    <h3 class="task-title">${escapeHtml(task.title)}</h3>
+                    <div class="task-badges">
+                        <span class="task-priority">${task.priority}</span>
+                        <span class="task-category ${categoryClass}">${categoryDisplay}</span>
+                    </div>
+                </div>
+                ${task.description ? `<p class="task-description">${escapeHtml(task.description)}</p>` : ''}
+                <div class="task-meta">
+                    <small>Created: ${createdDate}</small>
+                    ${task.isCompleted ? `<small>Completed: ${new Date(task.updatedAt).toLocaleDateString()}</small>` : ''}
+                </div>
+            </div>
+            <div class="task-actions">
+                <button class="btn btn-toggle" onclick="handleTaskToggle('${task.id}')">
+                    ${task.isCompleted ? '↶' : '✓'}
+                </button>
+                <button class="btn btn-delete" onclick="handleTaskDelete('${task.id}')">
+                    🗑️
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render category statistics
+ */
+function renderCategoryStats() {
+    // Kita asumsikan ada kontainer stats dengan ID 'taskStats' dari index.html Anda
+    const statsContainer = document.getElementById('taskStats');
+    if (!statsContainer || !app.currentUser) return;
+    
+    const categoryStats = app.taskRepository.getCategoryStats(app.currentUser.id);
+    const categories = EnhancedTask.getAvailableCategories();
+    
+    const statsHTML = categories
+        .filter(cat => categoryStats[cat] && categoryStats[cat].total > 0)
+        .map(cat => {
+            const stats = categoryStats[cat];
+            const displayName = cat.charAt(0).toUpperCase() + cat.slice(1);
+            
+            return `
+                <div class="category-stat-item">
+                    <h4>${displayName}</h4>
+                    <div class="stat-number">${stats.total}</div>
+                    <small>${stats.completed} completed</small>
+                </div>
+            `;
+        }).join('');
+    
+    if (statsHTML) {
+        statsContainer.innerHTML = statsHTML;
+    } else {
+        statsContainer.innerHTML = '<p>No statistics available yet.</p>';
+    }
+}
+
+// --- UTILITIES & DEMO ---
+
 function loadUserListForAssign() {
     const response = app.userController.getAllUsers();
-    
     if (response.success) {
         const assigneeSelect = document.getElementById('taskAssignee');
         if (assigneeSelect) {
-            // Clear existing options except "self"
             assigneeSelect.innerHTML = '<option value="self">Diri Sendiri</option>';
-            
-            // Add other users
             response.data.forEach(user => {
                 if (user.id !== app.currentUser.id) {
                     const option = document.createElement('option');
@@ -310,128 +402,76 @@ function loadUserListForAssign() {
     }
 }
 
-/**
- * Show overdue tasks
- */
 function showOverdueTasks() {
     const response = app.taskController.getOverdueTasks();
-    
     if (response.success) {
-        if (response.count === 0) {
-            showMessage('Tidak ada task yang overdue', 'info');
-        } else {
-            showMessage(`Ditemukan ${response.count} task yang overdue`, 'warning');
-            // Filter view untuk menampilkan overdue tasks
-            // Implementasi ini bisa diperbaiki dengan menambah filter khusus
-        }
-    } else {
-        showMessage(response.error, 'error');
+        if (response.count === 0) showMessage('Tidak ada task yang overdue', 'info');
+        else showMessage(`Ditemukan ${response.count} task yang overdue`, 'warning');
     }
 }
 
-/**
- * Show tasks due soon
- */
 function showDueSoonTasks() {
     const response = app.taskController.getTasksDueSoon(3);
-    
     if (response.success) {
-        if (response.count === 0) {
-            showMessage('Tidak ada task yang akan due dalam 3 hari', 'info');
-        } else {
-            showMessage(`Ditemukan ${response.count} task yang akan due dalam 3 hari`, 'warning');
-        }
-    } else {
-        showMessage(response.error, 'error');
+        if (response.count === 0) showMessage('Tidak ada task yang akan due dalam 3 hari', 'info');
+        else showMessage(`Ditemukan ${response.count} task yang akan due dalam 3 hari`, 'warning');
     }
 }
 
-/**
- * Export app data
- */
 function exportAppData() {
     const exportData = app.storage.exportData();
-    
     if (exportData) {
         const dataStr = JSON.stringify(exportData, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);
-        link.download = `task-app-backup-${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `task-app-day4-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
-        
         showMessage('Data berhasil diekspor', 'success');
-    } else {
-        showMessage('Gagal mengekspor data', 'error');
     }
 }
 
-/**
- * Create demo user jika belum ada
- */
 function createDemoUserIfNeeded() {
     const users = app.userRepository.findAll();
-    
     if (users.length === 0) {
-        try {
-            // Buat demo user
-            app.userRepository.create({
-                username: 'demo',
-                email: 'demo@example.com',
-                fullName: 'Demo User'
-            });
-            
-            app.userRepository.create({
-                username: 'john',
-                email: 'john@example.com',
-                fullName: 'John Doe'
-            });
-            
-            console.log('✅ Demo users created');
-        } catch (error) {
-            console.error('Failed to create demo users:', error);
-        }
+        app.userRepository.create({ username: 'demo', email: 'demo@example.com', fullName: 'Demo User' });
+        console.log('✅ Demo users created');
     }
 }
 
-/**
- * Show message to user
- */
 function showMessage(message, type = 'info') {
-    if (app.taskView) {
-        app.taskView.showMessage(message, type);
-    } else {
-        console.log(`${type.toUpperCase()}: ${message}`);
+    if (app.taskView) app.taskView.showMessage(message, type);
+    else console.log(`${type.toUpperCase()}: ${message}`);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Global functions for inline button events
+window.handleTaskToggle = (id) => {
+    const task = app.taskRepository.findById(id);
+    const newStatus = task.isCompleted ? 'pending' : 'completed';
+    app.taskController.updateTask(id, { status: newStatus });
+    app.taskView.refresh();
+    renderCategoryStats();
+};
+
+window.handleTaskDelete = (id) => {
+    if (confirm('Hapus task ini?')) {
+        app.taskController.deleteTask(id);
+        app.taskView.refresh();
+        renderCategoryStats();
     }
-}
+};
 
-/**
- * Handle errors globally
- */
-window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
+// Global error handlers
+window.addEventListener('error', (e) => {
+    console.error('Global error:', e.error);
     showMessage('Terjadi kesalahan pada aplikasi', 'error');
 });
 
-/**
- * Handle unhandled promise rejections
- */
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
-    showMessage('Terjadi kesalahan pada aplikasi', 'error');
-});
-
-// Initialize app when DOM is ready
+// Start the app
 document.addEventListener('DOMContentLoaded', initializeApp);
-
-// Export untuk testing (jika diperlukan)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        initializeApp,
-        handleLogin,
-        handleLogout,
-        handleRegister,
-        app
-    };
-}
