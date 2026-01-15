@@ -268,82 +268,85 @@ function handleCategoryFilter(event) {
 /**
  * Update renderTaskList function untuk support category filtering
  */
+/**
+ * Render Task List dengan Logika Filter yang Diperbaiki
+ */
 function renderTaskList(filterType = 'all', filterValue = null) {
-    const taskListContainer = document.getElementById('taskList');
-    if (!taskListContainer) return;
+    const container = document.getElementById('taskList');
+    if (!container) return;
     
-    // Ambil data melalui repository/controller agar sinkron dengan state app
+    // Ambil semua task dari repository
     let tasks = app.taskRepository.findAll();
     
-    // Apply filters
+    console.log(`Filtering for: ${filterType}. Total tasks available: ${tasks.length}`);
+
+    // Logika penyaringan
     switch (filterType) {
-        case 'pending':
-            tasks = tasks.filter(task => !task.isCompleted);
+        case 'pending': 
+            tasks = tasks.filter(t => (t.isCompleted === false || t._status !== 'completed')); 
             break;
-        case 'completed':
-            tasks = tasks.filter(task => task.isCompleted);
+        case 'completed': 
+            tasks = tasks.filter(t => (t.isCompleted === true || t._status === 'completed')); 
             break;
-        case 'high':
-            tasks = tasks.filter(task => task.priority === 'high');
+        case 'high': 
+            // FIX: Cek properti priority secara case-insensitive dan cek properti privat
+            tasks = tasks.filter(t => {
+                const p = (t.priority || t._priority || '').toLowerCase();
+                return p === 'high' || p === 'urgent'; // High priority juga mencakup Urgent
+            });
             break;
-        case 'category':
-            tasks = tasks.filter(task => task.category === filterValue);
+        case 'category': 
+            tasks = tasks.filter(t => (t.category === filterValue || t._category === filterValue)); 
             break;
     }
     
-    // Sort tasks by creation date (newest first)
-    tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Sort: Terbaru di atas
+    tasks.sort((a, b) => new Date(b.createdAt || b._createdAt) - new Date(a.createdAt || a._createdAt));
     
+    // Tampilan jika kosong
     if (tasks.length === 0) {
-        const filterText = filterType === 'category' ? `in ${filterValue} category` : `with ${filterType} filter`;
-        taskListContainer.innerHTML = `
+        container.innerHTML = `
             <div class="empty-state">
-                <p>No tasks found ${filterText}</p>
-                <small>Create your first task using the form above</small>
-            </div>
-        `;
+                <p>Belum ada task untuk filter <strong>${filterType}</strong></p>
+                <small>Pastikan prioritas task yang dibuat adalah "High"</small>
+            </div>`;
         return;
     }
     
-    const taskHTML = tasks.map(task => createTaskHTML(task)).join('');
-    taskListContainer.innerHTML = taskHTML;
+    // Render list
+    container.innerHTML = tasks.map(task => createTaskHTML(task)).join('');
 }
 
 /**
- * Update createTaskHTML function untuk include category display
+ * Pastikan createTaskHTML membaca data dengan benar
  */
 function createTaskHTML(task) {
-    const priorityClass = `priority-${task.priority}`;
-    const completedClass = task.isCompleted ? 'completed' : '';
-    const categoryClass = `category-${task.category}`;
-    const createdDate = new Date(task.createdAt).toLocaleDateString();
+    // Gunakan fallback ke properti privat jika getter gagal
+    const priority = task.priority || task._priority || 'medium';
+    const category = task.category || task._category || 'personal';
+    const title = task.title || task._title || 'Untitled';
+    const isCompleted = task.isCompleted !== undefined ? task.isCompleted : (task._status === 'completed');
     
-    // Gunakan fungsi dari model untuk nama yang lebih cantik
-    const categoryDisplay = task.getCategoryDisplayName ? task.getCategoryDisplayName() : task.category;
+    const priorityClass = `priority-${priority}`;
+    const completedClass = isCompleted ? 'completed' : '';
+    const categoryDisplay = task.getCategoryDisplayName ? task.getCategoryDisplayName() : category;
     
     return `
-        <div class="task-item ${priorityClass} ${completedClass}" data-task-id="${task.id}">
+        <div class="task-item ${priorityClass} ${completedClass}" data-task-id="${task.id || task._id}">
             <div class="task-content">
                 <div class="task-header">
-                    <h3 class="task-title">${escapeHtml(task.title)}</h3>
+                    <h3 class="task-title">${escapeHtml(title)}</h3>
                     <div class="task-badges">
-                        <span class="task-priority">${task.priority}</span>
-                        <span class="task-category ${categoryClass}">${categoryDisplay}</span>
+                        <span class="task-priority">${priority}</span>
+                        <span class="task-category category-${category}">${categoryDisplay}</span>
                     </div>
-                </div>
-                ${task.description ? `<p class="task-description">${escapeHtml(task.description)}</p>` : ''}
-                <div class="task-meta">
-                    <small>Created: ${createdDate}</small>
-                    ${task.isCompleted ? `<small>Completed: ${new Date(task.updatedAt).toLocaleDateString()}</small>` : ''}
                 </div>
             </div>
             <div class="task-actions">
-                <button class="btn btn-toggle" onclick="handleTaskToggle('${task.id}')">
-                    ${task.isCompleted ? '↶' : '✓'}
+                <button class="btn btn-toggle" onclick="handleTaskToggle('${task.id || task._id}')">
+                    ${isCompleted ? '↶' : '✓'}
                 </button>
-                <button class="btn btn-delete" onclick="handleTaskDelete('${task.id}')">
-                    🗑️
-                </button>
+                <button class="btn btn-delete" onclick="handleTaskDelete('${task.id || task._id}')">🗑️</button>
             </div>
         </div>
     `;

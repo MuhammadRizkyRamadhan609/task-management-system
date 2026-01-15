@@ -236,41 +236,27 @@ class TaskRepository {
     filter(filters) {
         let results = this.findAll();
         
-        if (filters.ownerId) {
-            results = results.filter(task => task.ownerId === filters.ownerId);
-        }
-        
-        if (filters.assigneeId) {
-            results = results.filter(task => task.assigneeId === filters.assigneeId);
-        }
-        
-        if (filters.category) {
-            results = results.filter(task => task.category === filters.category);
-        }
-        
-        if (filters.status) {
-            results = results.filter(task => task.status === filters.status);
-        }
-        
-        if (filters.priority) {
-            results = results.filter(task => task.priority === filters.priority);
-        }
-        
-        if (filters.overdue) {
-            results = results.filter(task => task.isOverdue);
-        }
-        
-        if (filters.dueSoon) {
+        if (filters.status && filters.status !== 'all') {
             results = results.filter(task => {
-                const days = task.daysUntilDue;
-                return days !== null && days <= 3 && days >= 0;
+                // Cek getter isCompleted atau properti _status
+                const status = task.status || task._status;
+                return status === filters.status;
             });
         }
         
-        if (filters.tags && filters.tags.length > 0) {
-            results = results.filter(task =>
-                filters.tags.some(tag => task.tags.includes(tag))
-            );
+        if (filters.priority && filters.priority !== 'all') {
+            results = results.filter(task => {
+                // Robust check: cek getter priority atau properti _priority
+                const priority = task.priority || task._priority;
+                return priority === filters.priority;
+            });
+        }
+        
+        if (filters.category && filters.category !== 'all') {
+            results = results.filter(task => {
+                const category = task.category || task._category;
+                return category === filters.category;
+            });
         }
         
         return results;
