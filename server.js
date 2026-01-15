@@ -23,9 +23,33 @@ app.get('*', (req, res) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
-    console.log(`🚀 Development server running at http://localhost:${PORT}`);
-    console.log(`📁 Serving files from: ${path.join(__dirname, 'public')}`);
+// app.listen(PORT, "0.0.0.0", () => {
+//     console.log(`🚀 Development server running at http://localhost:${PORT}`);
+//     console.log(`📁 Serving files from: ${path.join(__dirname, 'public')}`);
+//     console.log(`\n📖 Ready for development!`);
+//     console.log(`\n🛑 Press Ctrl+C to stop the server`);
+// });
+
+app.listen(PORT, '0.0.0.0', () => {
+    const os = require('os');
+    const networkInterfaces = os.networkInterfaces();
+    
+    // Get local IP address
+    let localIP = 'localhost';
+    Object.keys(networkInterfaces).forEach((interfaceName) => {
+        networkInterfaces[interfaceName].forEach((iface) => {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                localIP = iface.address;
+            }
+        });
+    });
+    
+    console.log(`🚀 Development server running!`);
+    console.log(`\n📱 Access from this computer:`);
+    console.log(`   http://localhost:${PORT}`);
+    console.log(`\n📱 Access from other devices (phone, tablet):`);
+    console.log(`   http://${localIP}:${PORT}`);
+    console.log(`\n📁 Serving files from: ${path.join(__dirname, 'public')}`);
     console.log(`\n📖 Ready for development!`);
     console.log(`\n🛑 Press Ctrl+C to stop the server`);
 });
