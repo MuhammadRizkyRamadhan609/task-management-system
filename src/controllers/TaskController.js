@@ -1,11 +1,10 @@
 /**
  * Task Controller - Mengatur alur kerja task management
- * 
- * Controller dalam MVC Pattern:
+ * * Controller dalam MVC Pattern:
  * - Menerima input dari user (via View)
  * - Memproses dengan bantuan Model dan Repository
  * - Mengirim response kembali ke View
- * - Tidak mengandung business logic (itu ada di Model/Service)
+ * - Terintegrasi dengan fitur Kategori Day 4
  */
 class TaskController {
     constructor(taskRepository, userRepository) {
@@ -452,6 +451,92 @@ class TaskController {
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * --- METODE TAMBAHAN UNTUK KATEGORI (FIX UNTUK TESTING) ---
+     */
+
+    /**
+     * Mendapatkan task berdasarkan kategori
+     * @param {string} category - Kategori yang dicari
+     */
+    getTasksByCategory(category) {
+        try {
+            if (!this.currentUser) {
+                return { success: false, error: 'Unauthorized' };
+            }
+
+            // Validasi kategori via Model EnhancedTask statis
+            const validCategories = EnhancedTask.getAvailableCategories();
+            if (!validCategories.includes(category)) {
+                return { success: false, error: 'Kategori tidak valid' };
+            }
+
+            const tasks = this.taskRepository.findByCategory(category)
+                .filter(t => t.ownerId === this.currentUser.id);
+
+            // Ambil display name menggunakan dummy task agar logic di model terpakai
+            const tempTask = new EnhancedTask('temp', 'desc', this.currentUser.id, { category });
+
+            return { 
+                success: true, 
+                data: tasks, 
+                category: category,
+                categoryDisplayName: tempTask.getCategoryDisplayName()
+            };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Update kategori tugas
+     */
+    updateTaskCategory(taskId, newCategory) {
+        return this.updateTask(taskId, { category: newCategory });
+    }
+
+    /**
+     * Mendapatkan statistik kategori untuk dashboard
+     */
+    getCategoryStats() {
+        try {
+            if (!this.currentUser) return { success: false, error: 'Unauthorized' };
+
+            const stats = this.taskRepository.getCategoryStats(this.currentUser.id);
+            const mostUsed = this.taskRepository.getMostUsedCategories(this.currentUser.id);
+
+            return {
+                success: true,
+                data: {
+                    byCategory: stats,
+                    mostUsed: mostUsed
+                }
+            };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Mendapatkan daftar kategori tersedia untuk UI
+     */
+    getAvailableCategories() {
+        try {
+            const categories = EnhancedTask.getAvailableCategories();
+            const data = categories.map(cat => {
+                const temp = new EnhancedTask('temp', 'desc', 'owner', { category: cat });
+                return {
+                    value: cat,
+                    label: temp.getCategoryDisplayName()
+                };
+            });
+
+            return { success: true, data: data };
+        } catch (error) {
+            return { success: false, error: error.message };
         }
     }
 }
